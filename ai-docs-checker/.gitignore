@@ -18,7 +18,7 @@ venv/
 *.xlsx
 
 # User uploads
-#data/*
+data/*
 
 # OS-generated files
 .DS_Store
