@@ -4,6 +4,7 @@
 AI ini masih dalam tahap pengembangan ;)
 
 !! LAKUKAN INI UNTUK PERTAMA KALI!!
+
 Buatlah folder dengan nama data, static, dan templates
 
 !! JALANKAN DENGAN VIRTUAL ENVIRONMENT PYTHON AGAR LIBRARY TIDAK BENTROK !!
