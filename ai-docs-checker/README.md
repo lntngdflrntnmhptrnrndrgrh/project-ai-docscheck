@@ -3,6 +3,10 @@
 !! PERLU DIINGAT !!
 AI ini masih dalam tahap pengembangan ;)
 
+!! LAKUKAN INI UNTUK PERTAMA KALI!!
+Buatlah folder dengan nama data, static, dan templates
+
+!! JALANKAN DENGAN VIRTUAL ENVIRONMENT PYTHON AGAR LIBRARY TIDAK BENTROK !!
 Cara menggunakan dengan virtual env:
 1. Download/clone repo ini
 2. Buka di VSCode
