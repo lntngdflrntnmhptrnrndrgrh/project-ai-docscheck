@@ -16,9 +16,21 @@ venv/
 # Output files
 *.pdf
 *.xlsx
+*.h5  # Trained models
 
 # User uploads
 data/*
+
+# Image outputs from PDF conversion
+page_images/*
+
+# Datasets (pastikan kalau tidak ingin dishare)
+dataset_ttd/*
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
 
 # OS-generated files
 .DS_Store
