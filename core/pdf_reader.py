@@ -1,49 +1,49 @@
 # core/pdf_reader.py
-import fitz  # PyMuPDF
 import pytesseract
 from pdf2image import convert_from_path
-from PIL import Image
-import numpy as np
-import cv2
+import fitz
 
 def extract_text_from_pdf(file_path, ignore_titles=None):
     """
-    Mengekstrak teks dari setiap halaman PDF menggunakan pendekatan hybrid.
-    Jika sebuah halaman mengandung judul dari daftar ignore_titles,
-    kontennya akan diabaikan (diganti dengan string kosong).
+    Fungsi ini diekslusifkan untuk melakukan OCR pada halaman gambar dan mengekstrak teks digital.
+    Fungsi ini akan mengembalikan teks per halaman dan juga list gambar untuk analisis lebih lanjut.
     """
     text_per_page = []
-    
+    images = []
+
     try:
         images = convert_from_path(file_path, dpi=200)
     except Exception as e:
         print(f"Error converting PDF to images: {e}")
-        return []
-
+        # Jika konversi gagal, buat list gambar kosong sesuai jumlah halaman
+        with fitz.open(file_path) as doc:
+            images = [None] * len(doc) 
+    
     with fitz.open(file_path) as doc:
+        # Pastikan jumlah gambar dan halaman cocok jika konversi berhasil
         if len(images) != len(doc):
-            print("Peringatan: Jumlah halaman dari PyMuPDF dan pdf2image tidak cocok.")
-            return []
-            
+             images = [None] * len(doc)
+
         for i, page in enumerate(doc):
-            page_content = ""
-            # 1. Coba ekstraksi teks digital
+            # Coba ekstraksi teks digital terlebih dahulu
             text = page.get_text("text")
             
-            # 2. Jika teks digital kosong atau sangat sedikit, gunakan OCR
-            if not text or len(text.strip()) < 20:
-                try:    
-                    config = '--psm 6'
+            # Jika tidak ada teks digital, lakukan OCR pada gambar halaman tersebut
+            if not text or len(text.strip()) < 20 and images[i] is not None:
+                try:
+                    # Gunakan config yang fleksibel untuk menangani berbagai jenis halaman
+                    config = '--psm 6' 
                     page_content = pytesseract.image_to_string(images[i], lang="ind+eng", config=config)
                 except Exception:
-                    page_content = "" # Abaikan jika ada error OCR
+                    page_content = ""
             else:
-                page_content = text
+                page_content = text if text else ""
 
-            # 3. Periksa apakah halaman ini harus diabaikan
+            # Abaikan halaman berdasarkan judul yang ada di daftar ignore_titles
             if ignore_titles and any(title.lower() in page_content.lower() for title in ignore_titles):
-                text_per_page.append("") # Tambahkan string kosong untuk mengabaikan halaman
+                text_per_page.append("")
             else:
                 text_per_page.append(page_content)
-    
-    return text_per_page
+
+    # Kembalikan DUA variabel: list teks dan list gambar
+    return text_per_page, images
