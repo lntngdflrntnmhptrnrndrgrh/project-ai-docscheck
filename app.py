@@ -7,8 +7,9 @@ from collections import Counter
 from datetime import datetime
 from streamlit.components.v1 import html
 from fpdf import FPDF
+import os
 import io
-from core.boq_extractor import re_extract_and_parse_boq
+#from core.boq_extractor import find_boq_page_from_text
 import pytesseract
 
 # ---- CACHING ----
@@ -17,6 +18,9 @@ def process_uploaded_pdf(uploaded_file_bytes):
     """
     Fungsi ini melakukan semua pekerjaan berat dan hasilnya akan di-cache.
     """
+
+    if not os.path.exists('data'):
+        os.makedirs('data')
 
     # Simpan byte ke file sementara untuk diproses
     temp_file_path = f"data/temp_{datetime.now().timestamp()}.pdf"
@@ -31,10 +35,12 @@ def process_uploaded_pdf(uploaded_file_bytes):
     text_per_page, images = extract_text_from_pdf(temp_file_path, ignore_titles=ignore_titles)
 
     # 2. Ekstrak data BOQ (proses berat kedua)
-    df_boq, boq_page_index = re_extract_and_parse_boq(images)
+    #boq_data, boq_page_index = find_boq_page_from_text(text_per_page)
+
+    os.remove(temp_file_path)
 
     # Kembalikan semua hasil yang dibutuhkan
-    return text_per_page, images, df_boq, boq_page_index
+    return text_per_page, images
 
 # ---- APLIKASI UTAMA ----
 st.set_page_config(page_title="Checklist Dokumen Internal", layout="wide")
@@ -43,7 +49,7 @@ st.title("📄 Checklist Verifikasi Dokumen Internal")
 uploaded_file = st.file_uploader("Upload dokumen PDF", type="pdf")
 if uploaded_file:
     uploaded_file_bytes = uploaded_file.getvalue()
-    text_per_page, images, df_boq, boq_page_index = process_uploaded_pdf(uploaded_file_bytes)
+    text_per_page, images = process_uploaded_pdf(uploaded_file_bytes)
 
     st.success("File berhasil dianalisis!")
 
@@ -61,7 +67,9 @@ if uploaded_file:
             "Nota Dinas Pelaksanaan Uji Terima": ["Nota Dinas Pelaksanaan Uji Terima"],
             "BOQ Uji Terima": ["BOQ UJI TERIMA"],
             "Foto Kegiatan Uji Terima": ["DOKUMENTASI UJI TERIMA"],
-            "Foto Material terpasang sesuai BOQ": ["DOKUMENTASI INSTALASI", "DOKUMENTASI AKSESORIS TIANG"], # Judul yang mungkin relevan
+            "Foto Material terpasang sesuai BOQ": ["DOKUMENTASI SLACK SUPPORT", "DOKUMENTASI JOIN CLOSURE", 
+                                                   "DOKUMENTASI AKSESORIS TIANG (LABEL KABEL)", "DOKUMENTASI AKSESORIS TIANG (PU-AS-DE)",
+                                                   "DOKUMENTASI AKSESORIS TIANG (PU-AS-SC)", "DOKUMENTASI TN9", "DOKUMENTASI TN7"], # Judul yang mungkin relevan
             "Foto Roll Meter / Fault Locator": ["Fault Locator"], # Frasa ini tidak ada
             "Foto Pengukuran OPM": ["FOTO PENGUKURAN OPM", "FOTO PENGUKURAN OPM"],
             "Form OPM": ["FORM OPM", "DATA PENGUKURAN OPM"],
@@ -225,10 +233,19 @@ if uploaded_file:
             file_name = f"hasil_cek_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
             mime = "application/pdf"
         )
+        pass
 
 # --- BAGIAN ANALISIS BOQ YANG DIPERBARUI DAN BENAR ---
     with tab2:
         st.header("Analisis Verifikasi Kuantitas BOQ (Semi-Otomatis)")
+
+        boq_page_number = st.number_input (
+            "Silahkan masukkan nomor halaman BOQ:",
+            min_value=1,
+            max_value=len(images),
+            value=6,
+            step=1
+        )
         # st.warning("MODE DEBUGGING AKTIF: Menampilkan semua data kata mentah dari Halaman 6.")
 
             # Langsung ambil gambar untuk halaman ke-6 (indeks 5)
@@ -256,36 +273,62 @@ if uploaded_file:
     # Fungsi ekstraksi data BOQ 
         #df_boq, boq_page_index = re_extract_and_parse_boq(images)
 
-        if boq_page_index != -1:
-            st.info("Referensi Halaman BOQ:")
-            st.image(images[boq_page_index], caption=f"Halaman BOQ (ditemukan di hal. {boq_page_index + 1})", use_container_width=True)
+        if boq_page_number:
+            boq_page_index = boq_page_number - 1
+            st.info(f"Referensi Halaman BOQ (Halaman {boq_page_number}):")
+            st.image(images[boq_page_index], use_column_width=True)
 
-        if df_boq is not None and not df_boq.empty:
-            st.success("Data BOQ berhasil diekstrak! Silakan periksa dan koreksi kuantitas di bawah ini jika perlu.")
+        st.success("Silakan input kuantitas berdasarkan gambar di atas.")
 
-            edited_df_boq = st.data_editor(
-                df_boq,
-                column_config={
-                    "DESIGNATOR": st.column_config.Column("Designator (dari BOQ)", disabled=True),
-                    "KUANTITAS_BOQ": st.column_config.NumberColumn(
-                        "Kuantitas (Lakukan Verifikasi Manual)",
-                        help="Periksa dan isi kuantitas sesuai gambar di atas",
-                        min_value=0,
-                        step=1,
-                        format="%d"
-                    )
-                },
-                hide_index = True,
-                use_container_width = True,
-                key="boq_editor"
-            )
+            # Data untuk diisi oleh pengguna
+        boq_input_data = {
+            'DESIGNATOR': [
+                "SC-OF-SM-24", "OS-SM-1", "ODP Solid-PB-8 AS", "PU-S9.0-140",
+                "Slack Support HH", "Label Kabel Distribusi (KU FO)", "PU-S7.0-400NM",
+                "AC-OF-SM-ADSS-120", "PU-ASDE--50/70", "PU-AS-SC"
+            ],
+            'KUANTITAS_BOQ': [0] * 10
+        }
+        df_boq_input = pd.DataFrame(boq_input_data)
+        edited_df_boq = st.data_editor(
+            df_boq_input,
+            column_config={
+                "DESIGNATOR": st.column_config.Column("Designator (dari BOQ)", disabled=True),
+                "KUANTITAS_BOQ": st.column_config.NumberColumn("Input Kuantitas", min_value=0, step=1, format="%d")
+            },
+            hide_index=True, use_container_width=True, key="boq_editor"
+        )
 
-            if st.button("Lanjutkan ke Verifikasi Bukti", key="verify_button"):
-                st.session_state.final_boq = edited_df_boq
-                st.success("Data kuantitas BOQ telah disimpan. Tahap selanjutnya adalah menghitung bukti dari lampiran.")
-                st.write("Data BOQ yang akan digunakan untuk verifikasi:")
-                st.dataframe(st.session_state.final_boq, use_container_width=True)
-        else:
-            st.error("Gagal melakukan ekstrak data dari tabel BOQ. Lakukan input manual jika perlu.")
+        if st.button("Lanjutkan ke Verifikasi Bukti", key="verify_button"):
+            # Ambil data BOQ yang sudah diverifikasi pengguna
+            final_boq_df = st.session_state.get('final_boq', pd.DataFrame())
+            if final_boq_df.empty:
+                 final_boq_df = edited_df_boq # Ambil dari editor jika belum ada di session state
+            if (final_boq_df['KUANTITAS_BOQ'] == 0).any():
+                st.warning("Peringatan: Masih ada kuantitas yang bernilai 0. Pastikan semua data sudah terisi.")
+            else:
+                st.success("Data kuantitas BOQ telah disimpan. Memulai penghitungan bukti...")
+                
+                # --- LOGIKA BARU DI SINI ---
+                with st.spinner("Memindai dan menghitung bukti dari semua halaman lampiran..."):
+                    # Panggil fungsi penghitung bukti
+                    from core.evidence_counter import count_evidence
+                    counted_evidence_df = count_evidence(images)
+                # Gabungkan data BOQ dengan data hasil hitung bukti
+                comparison_df = pd.merge(
+                    final_boq_df,
+                    counted_evidence_df,
+                    on="DESIGNATOR",
+                    how="left"
+                ).fillna(0) # Isi designator yang tidak ada buktinya dengan 0
+                # Tentukan status berdasarkan perbandingan kuantitas
+                comparison_df['STATUS'] = comparison_df.apply(
+                    lambda row: "✅ Sesuai" if row['KUANTITAS_BOQ'] == row['JUMLAH_BUKTI'] else "❌ Tidak Sesuai",
+                    axis=1
+                )
+                
+                st.header("Hasil Akhir Verifikasi Kuantitas")
+                st.dataframe(comparison_df, use_container_width=True)        #else:
+        #    st.error("Halaman 'BOQ UJI TERIMA' tidak dapat ditemukan di dalam dokumen.")
 
        
