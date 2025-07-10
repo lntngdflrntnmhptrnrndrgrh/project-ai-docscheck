@@ -7,6 +7,7 @@ from streamlit.components.v1 import html
 from fpdf import FPDF
 import os
 import io
+import numpy as np
 import pytesseract
 
 from core.pdf_reader import extract_text_from_pdf
@@ -21,7 +22,6 @@ def process_uploaded_pdf(uploaded_file_bytes):
     """
     Fungsi ini melakukan semua pekerjaan berat dan hasilnya akan di-cache.
     """
-
     if not os.path.exists('data'):
         os.makedirs('data')
 
@@ -33,7 +33,8 @@ def process_uploaded_pdf(uploaded_file_bytes):
     # 1. Ekstrak teks dan gambar (proses berat pertama)
     ignore_titles = [
         "CHECKLIST VERIFIKASI BA UJI TERIMA",
-        "CHECKLIST VERIFIKASI BERITA ACARA COMMISSIONING TEST"
+        "CHECKLIST VERIFIKASI BERITA ACARA COMMISSIONING TEST",
+        "BOQ COMMISSIONING TEST"
     ]
     text_per_page, images = extract_text_from_pdf(temp_file_path, ignore_titles=ignore_titles)
 
@@ -49,13 +50,28 @@ def process_uploaded_pdf(uploaded_file_bytes):
 st.set_page_config(page_title="Checklist Dokumen Internal", layout="wide")
 st.title("📄 Checklist Verifikasi Dokumen Internal")
 
+if 'boq_submitted' not in st.session_state:
+    st.session_state.boq_submitted = False
+if 'show_report_form' not in st.session_state:
+    st.session_state.show_report_form = False    
+if 'final_report_df' not in st.session_state:
+    st.session_state.final_report_df = None    
+if 'comparison_df' not in st.session_state:
+    st.session_state.comparison_df = None
+if 'evidence_galleries' not in st.session_state:
+    st.session_state.evidence_galleries = None
+if 'boq_data_for_gallery' not in st.session_state:
+    st.session_state.boq_data_for_gallery = None
+if 'stage' not in st.session_state:
+    st.session_state.stage = 'input_boq'
+
 uploaded_file = st.file_uploader("Upload dokumen PDF", type="pdf")
 if uploaded_file:
     uploaded_file_bytes = uploaded_file.getvalue()
     text_per_page, images, boq_page_index = process_uploaded_pdf(uploaded_file_bytes)
 
     if not images:
-        st.error("Gagal memproses file PDF. Jika pesan error tetap muncul, pastikan Poppler telah terinstall.")
+        st.error("Gagal memproses file PDF.")
         st.stop()
         
     st.success("File berhasil dianalisis!")
@@ -244,54 +260,85 @@ if uploaded_file:
 
 # --- BAGIAN ANALISIS BOQ YANG DIPERBARUI DAN BENAR ---
     with tab2:
-        st.header("Verifikasi Kuantitas BOQ (Asisten Pengumpul Bukti)")
+        # State 1: Tampilkan form untuk input kuantitas BOQ
+        if st.session_state.stage == 'input_boq':
+            st.header("Langkah 1: Verifikasi Kuantitas BOQ")
+            if boq_page_index != -1:
+                st.image(images[boq_page_index], caption=f"Halaman BOQ (Otomatis terdeteksi di hal. {boq_page_index + 1})")
+                
+                with st.form(key="boq_form"):
+                    st.info("Periksa dan isi kuantitas aktual dari gambar di atas.")
+                    boq_input_data = {
+                        'DESIGNATOR': [
+                            "SC-OF-SM-24", "ODP Solid-PB-8 AS", "PU-S9.0-140", "Slack Support HH",
+                            "Label Kabel Distribusi (KU FO)", "PU-S7.0-400NM", "PU-AS-DE-50/70", "PU-AS-SC"
+                        ], 'KUANTITAS_BOQ': [0] * 8
+                    }
+                    df_boq_input = pd.DataFrame(boq_input_data)
+                    edited_df_boq = st.data_editor(
+                        df_boq_input, hide_index=True, use_container_width=True,
+                        column_config={"DESIGNATOR": st.column_config.Column(disabled=True)}
+                    )
+                    submit_button = st.form_submit_button(label="Kumpulkan Bukti & Lanjutkan ke Verifikasi")
 
-        if boq_page_index != -1:
-            st.info("Referensi Halaman BOQ:")
-            st.image(images[boq_page_index], caption=f"Halaman BOQ (ditemukan di hal. {boq_page_index + 1})", use_column_width=True)
+                    if submit_button:
+                        st.session_state.final_boq_data = edited_df_boq
+                        st.session_state.stage = 'verify_evidence' # Pindah ke tahap berikutnya
+                        st.rerun() # Refresh untuk menampilkan tahap berikutnya
+            else:
+                st.error("Halaman 'BOQ UJI TERIMA' tidak dapat ditemukan secara otomatis.")
+
+        # State 2: Tampilkan galeri bukti dan form laporan
+        elif st.session_state.stage == 'verify_evidence':
+            st.header("Langkah 2: Laporan Verifikasi Akhir")
+            st.info("Berikut adalah bukti yang terkumpul. Berikan status dan catatan verifikasi Anda.")
             
-            st.info("Silakan input kuantitas pada tabel di bawah ini berdasarkan gambar di atas.")
+            with st.spinner("Mengumpulkan semua bukti dari lampiran..."):
+                evidence_galleries = collect_evidence(images, st.session_state.final_boq_data, text_per_page, boq_page_index)
 
-            boq_input_data = {
-                'DESIGNATOR': [
-                    "SC-OF-SM-24", "ODP Solid-PB-8 AS", "PU-S9.0-140", "Slack Support HH",
-                    "Label Kabel Distribusi (KU FO)", "PU-S7.0-400NM", "PU-ASDE--50/70", "PU-AS-SC"
-                ], 'KUANTITAS_BOQ': [0] * 8
-            }
-            df_boq_input = pd.DataFrame(boq_input_data)
-            
-            edited_df_boq = st.data_editor(
-                df_boq_input, hide_index=True, use_container_width=True, key="boq_editor",
-                column_config={"DESIGNATOR": st.column_config.Column(disabled=True)}
-            )
+            with st.form(key="report_form"):
+                for index, row in st.session_state.final_boq_data.iterrows():
+                    designator, boq_qty = row['DESIGNATOR'], row['KUANTITAS_BOQ']
+                    st.subheader(f"Item: {designator}")
+                    st.markdown(f"Kuantitas Menurut BOQ: **{boq_qty}**")
 
-            if st.button("Kumpulkan & Tampilkan Bukti", key="verify_button"):
-                if (edited_df_boq['KUANTITAS_BOQ'] == 0).any():
-                    st.warning("Peringatan: Masih ada kuantitas yang bernilai 0.")
-                else:
-                    with st.spinner("Mencari dan mengumpulkan semua bukti dari lampiran..."):
-                        evidence_galleries = collect_evidence(images, edited_df_boq)
+                    gallery_images = evidence_galleries.get(designator, [])
+                    if gallery_images:
+                        st.write(f"Jumlah Halaman Bukti Ditemukan: **{len(gallery_images)}**")
+                        cols = st.columns(4) 
+                        for i, img in enumerate(gallery_images):
+                            cols[i % 4].image(img, use_container_width=True, caption=f"Bukti #{i+1}")
+                    else:
+                        st.warning("Tidak ada bukti foto yang ditemukan untuk item ini.")
                     
-                    st.header("Galeri Bukti untuk Verifikasi")
-                    for index, row in edited_df_boq.iterrows():
-                        designator = row['DESIGNATOR']
-                        boq_qty = row['KUANTITAS_BOQ']
-                        
-                        st.subheader(f"Item: {designator}")
-                        st.write(f"Kuantitas Menurut BOQ: **{boq_qty}**")
+                    # Kolom input untuk verifikasi manual
+                    status_verifikasi = st.radio("Status Verifikasi:", ["✅ Sesuai", "❌ Tidak Sesuai", "⚠️ Perlu Diperiksa"], key=f"status_{designator}", horizontal=True)
+                    catatan = st.text_area("Catatan (Opsional):", key=f"notes_{designator}", height=100)
+                    st.divider()
 
-                        if designator in evidence_galleries and evidence_galleries[designator]:
-                            found_images = evidence_galleries[designator]
-                            st.write(f"Jumlah Halaman Bukti Ditemukan: **{len(found_images)}**")
-                            
-                            # Tampilkan gambar bukti dalam beberapa kolom agar rapi
-                            cols = st.columns(4) 
-                            for i, img in enumerate(found_images):
-                                col = cols[i % 4]
-                                col.image(img, use_column_width=True)
-                        else:
-                            st.warning("Tidak ada bukti foto yang ditemukan untuk item ini.")
-                        st.divider()
+                report_submit_button = st.form_submit_button("Simpan & Buat Laporan Final")
+                if report_submit_button:
+                    # Kumpulkan data dari input pengguna
+                    report_data = []
+                    for index, row in st.session_state.final_boq_data.iterrows():
+                        report_data.append({
+                            "DESIGNATOR": row['DESIGNATOR'], "KUANTITAS_BOQ": row['KUANTITAS_BOQ'],
+                            #"JML_HALAMAN_BUKTI": len(evidence_galleries.get(row['DESIGNATOR'], [])),
+                            "STATUS_VERIFIKASI": st.session_state[f"status_{row['DESIGNATOR']}"],
+                            "CATATAN": st.session_state[f"notes_{row['DESIGNATOR']}"]
+                        })
+                    st.session_state.final_report_df = pd.DataFrame(report_data)
+                    st.session_state.stage = 'show_report' # Pindah ke tahap akhir
+                    st.rerun()
 
-        else:
-            st.error("Halaman 'BOQ UJI TERIMA' tidak dapat ditemukan secara otomatis di dalam dokumen ini.")
+        # State 3: Tampilkan laporan final
+        elif st.session_state.stage == 'show_report':
+            st.header("Laporan Final Verifikasi Kuantitas BOQ")
+            st.dataframe(st.session_state.final_report_df, use_container_width=True)
+            
+            if st.button("Lakukan Verifikasi Baru"):
+                # Reset state untuk memulai dari awal
+                st.session_state.stage = 'input_boq'
+                st.session_state.final_boq_data = None
+                st.session_state.final_report_df = None
+                st.rerun()

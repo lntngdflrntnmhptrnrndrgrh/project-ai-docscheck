@@ -1,9 +1,7 @@
 # core/evidence_counter.py
 import pytesseract
 import re
-import pandas as pd
 
-# Kamus ini memetakan Designator ke pola teks yang ada di label foto
 LABEL_MAP = {
     "SC-OF-SM-24": "JOIN CLOSURE",
     "ODP Solid-PB-8 AS": "ODP-SRR-FK",
@@ -11,34 +9,26 @@ LABEL_MAP = {
     "Slack Support HH": "SLACK SUPPORT",
     "Label Kabel Distribusi (KU FO)": "LABEL KABEL",
     "PU-S7.0-400NM": r"TN7\s*2S",
-    "PU-ASDE--50/70": "PU-AS-DE",
+    "PU-AS-DE-50/70": "PU-AS-DE",
     "PU-AS-SC": "PU-AS-SC",
 }
 
-def collect_evidence(images, verified_boq_df):
-    """
-    Mengumpulkan semua halaman gambar yang relevan untuk setiap designator di BOQ.
-    """
+def collect_evidence(images, verified_boq_df, text_per_page, boq_page_index):
     evidence_galleries = {row["DESIGNATOR"]: [] for index, row in verified_boq_df.iterrows()}
-    
-    # Proses setiap halaman satu per satu
+    found_pages_for_designator = {designator: set() for designator in evidence_galleries.keys()}
+
     for i, image in enumerate(images):
-        # Lewati halaman-halaman awal yang tidak mungkin berisi bukti
-        if i < 7:
+        if (i < len(text_per_page) and not text_per_page[i]) or i == boq_page_index:
             continue
             
         try:
-            page_text = pytesseract.image_to_string(image, lang="ind+eng", config="--psm 3")
+            page_text_ocr = pytesseract.image_to_string(image, lang="ind+eng", config="--psm 3")
         except Exception:
             continue
 
-        # Untuk setiap designator, cek apakah buktinya ada di halaman ini
         for designator, pattern in LABEL_MAP.items():
-            if re.search(pattern, page_text, re.IGNORECASE):
-                # Jika ditemukan, tambahkan gambar halaman ini ke galeri designator tersebut
-                if designator in evidence_galleries:
+            if designator in evidence_galleries and re.search(pattern, page_text_ocr, re.IGNORECASE):
+                if i not in found_pages_for_designator[designator]:
                     evidence_galleries[designator].append(image)
-                # Hentikan pencarian di halaman ini untuk designator lain agar tidak tumpang tindih
-                break
-                
+                    found_pages_for_designator[designator].add(i)
     return evidence_galleries
