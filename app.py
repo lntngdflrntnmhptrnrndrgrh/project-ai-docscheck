@@ -334,8 +334,103 @@ if uploaded_file:
         # State 3: Tampilkan laporan final
         elif st.session_state.stage == 'show_report':
             st.header("Laporan Final Verifikasi Kuantitas BOQ")
-            st.dataframe(st.session_state.final_report_df, use_container_width=True)
             
+            final_df = st.session_state.final_report_df
+            report_table_html = """
+            <style>
+              table { width: 100%; 
+                        border-collapse: collapse; 
+                        margin-top: 20px; 
+                        font-family: "Inter", sans-serif;
+                        font-size: 14px;
+                        color: white;
+                    }
+              th, td { border: 1px solid white; 
+                        padding: 8px;
+                        text-align: center;
+                        vertical-align: middle;
+                        color: white
+                    }
+              th { background-color: #444; color: white; }
+              td.item-name { text-align: left; }
+              td.notes { text-align: left; max-width: 300px; word-wrap: break-word; }
+            </style>
+            <table>
+              <tr>
+                <th>DESIGNATOR</th>
+                <th>KUANTITAS BOQ</th>
+                <th>STATUS VERIFIKASI</th>
+                <th>CATATAN</th>
+              </tr>
+            """
+            
+            for _, row in final_df.iterrows():
+                report_table_html += f"""
+                <tr>
+                    <td class="item-name">{row['DESIGNATOR']}</td>
+                    <td>{row['KUANTITAS_BOQ']}</td>
+                    <td>{row['STATUS_VERIFIKASI']}</td>
+                    <td class="notes">{row['CATATAN']}</td>
+                </tr>
+                """
+            report_table_html += "</table>"
+
+            html(report_table_html, height=400, scrolling=True)
+            
+            st.subheader("Download Laporan Final")
+            final_df = st.session_state.final_report_df
+            #col1, col2 = st.columns(2)
+
+            #with col1:
+            output_excel = io.BytesIO()
+            with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
+                final_df.to_excel(writer, index=False, sheet_name='Laporan Verifikasi')
+            excel_data = output_excel.getvalue()
+            st.download_button(
+                label="Download Laporan (Excel)",
+                data=excel_data,
+                file_name=f"laporan_verifikasi_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            #with col2:
+            pdf = FPDF(orientation='L') # Lanskap
+            pdf.add_page()
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(0, 10, "Laporan Final Verifikasi Kuantitas BOQ", 0, 1, 'C')
+            pdf.ln(5)
+            pdf.set_font("Arial", 'B', 8)
+            
+            # Header Tabel
+            header_widths = {'DESIGNATOR': 60, 'KUANTITAS_BOQ': 30, #'JML_HALAMAN_BUKTI': 40, 
+                             'STATUS_VERIFIKASI': 40, 'CATATAN': 100}
+            for col_name in final_df.columns:
+                # Ganti nama kolom untuk tampilan yang lebih baik di PDF jika perlu
+                display_name = col_name.replace('_', ' ').title()
+                pdf.cell(header_widths.get(col_name, 40), 8, display_name, 1, 0, 'C')
+            pdf.ln()
+            
+            # Isi Tabel
+            pdf.set_font("Arial", '', 8)
+            for index, row in final_df.iterrows():
+                # --- PERBAIKAN DI SINI ---
+                # Buat versi teks bersih dari status verifikasi
+                clean_status = str(row['STATUS_VERIFIKASI']).replace('✅', '').replace('❌', '').replace('⚠️', '').strip()
+                pdf.cell(header_widths['DESIGNATOR'], 8, str(row['DESIGNATOR']), 1)
+                pdf.cell(header_widths['KUANTITAS_BOQ'], 8, str(row['KUANTITAS_BOQ']), 1, 0, 'C')
+                #pdf.cell(header_widths['JML_HALAMAN_BUKTI'], 8, str(row['JML_HALAMAN_BUKTI']), 1, 0, 'C')
+                pdf.cell(header_widths['STATUS_VERIFIKASI'], 8, clean_status, 1) # Gunakan teks bersih
+                pdf.cell(header_widths['CATATAN'], 8, str(row['CATATAN']), 1)
+                pdf.ln()
+            pdf_data = pdf.output(dest='S').encode('latin-1')
+            
+            st.download_button(
+                label="Download Laporan (PDF)",
+                data=pdf_data,
+                file_name=f"laporan_verifikasi_{datetime.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf"
+            )
+            st.divider()
             if st.button("Lakukan Verifikasi Baru"):
                 # Reset state untuk memulai dari awal
                 st.session_state.stage = 'input_boq'
