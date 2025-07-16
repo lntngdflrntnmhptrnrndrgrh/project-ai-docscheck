@@ -8,3 +8,5 @@ pdf2image
 pytesseract
 Pillow
 xlsxwriter
+python-Levenshtein
+fuzzywuzzy

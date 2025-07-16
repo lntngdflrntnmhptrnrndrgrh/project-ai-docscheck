@@ -2,6 +2,10 @@
 import pytesseract
 from pdf2image import convert_from_path
 import fitz
+import os
+import streamlit as st
+import configparser
+import traceback    
 
 def extract_text_from_pdf(file_path, ignore_titles=None):
     """
@@ -10,26 +14,38 @@ def extract_text_from_pdf(file_path, ignore_titles=None):
     """
     text_per_page = []
     images = []
+    config = configparser.ConfigParser()
+    script_dir = os.path.dirname(__file__)
+    project_root = os.path.dirname(script_dir)
+    config_path = os.path.join(project_root, 'config.ini')
+
+    poppler_path_from_config = None
+    if os.path.exists(config_path):
+        config.read(config_path)
+        poppler_path_from_config = config.get('poppler', 'path', fallback=None)
 
     try:
-        images = convert_from_path(file_path, dpi=200)
+        images = convert_from_path(file_path, poppler_path=poppler_path_from_config)
     except Exception as e:
         print(f"Error converting PDF to images: {e}")
+        traceback.print_exc()
+        return [], []
         # Jika konversi gagal, buat list gambar kosong sesuai jumlah halaman
-        with fitz.open(file_path) as doc:
-            images = [None] * len(doc) 
+        #with fitz.open(file_path) as doc:
+        #    images = [None] * len(doc) 
     
     with fitz.open(file_path) as doc:
         # Pastikan jumlah gambar dan halaman cocok jika konversi berhasil
-        if len(images) != len(doc):
-             images = [None] * len(doc)
+        #if len(images) != len(doc):
+        #     images = [None] * len(doc)
 
         for i, page in enumerate(doc):
             # Coba ekstraksi teks digital terlebih dahulu
             text = page.get_text("text")
+            page_content = ""
             
             # Jika tidak ada teks digital, lakukan OCR pada gambar halaman tersebut
-            if not text or len(text.strip()) < 20 and images[i] is not None:
+            if (not text or len(text.strip()) < 20) and i < len(images) and images[i] is not None:
                 try:
                     # Gunakan config yang fleksibel untuk menangani berbagai jenis halaman
                     config = '--psm 6' 
