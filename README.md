@@ -14,6 +14,8 @@ Cara Menggunakan Sistem Ini
 pip install -r requirements.txt
 ```
 
+**JANGAN LUPA INSTALL POPPLER TERLEBIH DAHULU DAN MASUKKAN KE ENVIRONMENT VARIABLE**
+
 **INSTALL TESSERACT OCR DAN MASUKKAN KE ENVIRONMENT VARIABLE (WINDOWS)**
 
 Install tesseract terlebih dahulu di link berikut
