@@ -10,7 +10,7 @@ def find_boq_page(images):
         try:
             # Lakukan OCR cepat untuk mencari judul
             page_text = pytesseract.image_to_string(image, lang="ind+eng", config="--psm 3", timeout=10)
-            if "boq uji terima" in page_text.lower():
+            if {"boq uji terima", "bill of quantity"} in page_text.lower():
                 return i
         except Exception:
             continue

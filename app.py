@@ -91,17 +91,58 @@ if uploaded_file:
     # Menggunakan list untuk memungkinkan beberapa kemungkinan judul per item
         checklist_items = {
     # Kunci di sini sesuai dengan permintaan Anda, nilainya adalah kata kunci dari PDF
-    "BAUT": ["BERITA ACARA UJI TERIMA"],
-    "Laporan UT": ["LAPORAN UJI TERIMA"],
-    "Surat Permintaan Uji Terima dari Mitra": ["Permohonan Uji Terima SP"],
-    "BA Test Commissioning": ["BERITA ACARA COMMISIONING TEST"],
-    "S/K Penunjukan Team Uji Terima": ["Penunjukan Personil Tim Uji Terima"],
-    "Nota Dinas Pelaksanaan Uji Terima": ["Adapun periode waktu pelaksanaan dari tanggal"],
-    "Redline Drawing": ["AS BUILT DRAWING", "PETA LOKASI A"],
-    "BoQ Akhir": ["BOQ UJI TERIMA", "BOQ COMMISSIONING TEST", "LAMPIRAN BOQ UJI TERIMA"],
-    "Hasil Capture": ["FOTO PENGUKURAN OPM", "HASIL UKUR OTDR"],
-    "Evidence Photo": ["DOKUMENTASI UJI TERIMA", "DOKUMENTASI INSTALASI", "DOKUMENTASI AKSESORIS TIANG"]
-    }
+            #"BAUT": ["BERITA ACARA UJI TERIMA"],
+            #"Laporan UT": ["LAPORAN UJI TERIMA"],
+            #"Surat Permintaan Uji Terima dari Mitra": ["Permohonan Uji Terima SP"],
+            #"BA Test Commissioning": ["BERITA ACARA COMMISIONING TEST"],
+            #"S/K Penunjukan Team Uji Terima": ["Penunjukan Personil Tim Uji Terima"],
+            #"Nota Dinas Pelaksanaan Uji Terima": ["Adapun periode waktu pelaksanaan dari tanggal"],
+            #"Redline Drawing": ["AS BUILT DRAWING", "PETA LOKASI A"],
+            #"BoQ Akhir": ["BOQ UJI TERIMA", "BOQ COMMISSIONING TEST", "LAMPIRAN BOQ UJI TERIMA"],
+            #"Hasil Capture": ["FOTO PENGUKURAN OPM", "HASIL UKUR OTDR"],
+            #"Evidence Photo": ["DOKUMENTASI UJI TERIMA", "DOKUMENTASI INSTALASI", "DOKUMENTASI AKSESORIS TIANG"]
+            "BAUT": {
+                "keywords": ["BERITA ACARA UJI TERIMA"],
+                "method": "title"
+            },
+            "Laporan UT": {
+                "keywords": ["LAPORAN UJI TERIMA"],
+                "method": "title"
+            },
+            "BA Test Commissioning": {
+                "keywords": ["BERITA ACARA COMMISSIONING TEST"],
+                "method": "title"
+            },
+            "Redline Drawing": {
+                "keywords": ["PETA LOKASI", "SKEMA KABEL", "SKEMA"],
+                "method": "presence"
+            },
+            "BoQ Akhir": {
+                "keywords": ["BOQ UJI TERIMA", "BOQ COMMISSIONING TEST", "LAPORAN BOQ UJI TERIMA", "BILL OF QUANTITY"],
+                "method": "title"
+            },
+            "Hasil Capture": {
+                "keywords": ["FOTO PENGUKURAN OPM", "HASIL UKUR OTDR", "OTDR REPORT", "OTDR Report",
+                             "DATA PENGUKURAN OPM", "EVIDENCE HASIL UKUR", "EVIDENCE HASIL UKUR FEEDER", "EVIDENCE HASIL IN FEEDER OPM"],
+                "method": "title"
+            },
+            "Evidence Photo": {
+                "keywords": ["LAMPIRAN EVIDENCE UJI TERIMA", "EVIDENCE ODP", "EVIDENCE TIANG"],
+                "method": "presence"
+            },
+            "Surat Permintaan Uji Terima dari Mitra": {
+                "keywords": ["Permohonan Uji Terima SP"],
+                "method": "presence"
+            },
+            "S/K Penunjukan Team Uji Terima": {
+                "keywords": ["Penunjukan Personil Tim Uji Terima"],
+                "method": "presence"
+            },
+            "Nota Dinas Pelaksanaan Uji Terima": {
+                "keywords": ["Adapun periode waktu pelaksanaan dari tanggal"],
+                "method": "presence"
+            }
+            }
 
         structured_items = [
             ("1", "A", "BAUT"),
