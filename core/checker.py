@@ -1,27 +1,6 @@
-# core/checker.py
 import difflib
 from fuzzywuzzy import fuzz
-def match_text_fuzzy(text_line, keyword, threshold=0.8):
-    """
-    Membandingkan string hanya berdasarkan skor kemiripan keseluruhan.
-    Aturan "kata pertama" dihapus agar lebih toleran terhadap kesalahan OCR.
-    """
-    clean_line = ' '.join(text_line.lower().split())
-    clean_keyword = ' '.join(keyword.lower().split())
-    
-    if not clean_line or not clean_keyword:
-        return False
-    
-    line_words = clean_line.split()
-    keyword_words = clean_keyword.split()
 
-    if line_words[0] != keyword_words[0]:
-        return False
-    
-    # Hanya menggunakan pengecekan similarity score
-    score = difflib.SequenceMatcher(None, clean_line, clean_keyword).ratio()
-    return score >= threshold
-#
 def check_items(checklist_items, text_per_page, item_order):
     """
     Memeriksa item dengan metode pencocokan yang berbeda (title vs presence)

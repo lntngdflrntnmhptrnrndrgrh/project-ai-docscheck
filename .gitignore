@@ -2,3 +2,4 @@ venv/
 
 core/__pycache__/
 
+core/checker_asli.py
