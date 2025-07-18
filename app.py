@@ -115,7 +115,7 @@ if uploaded_file:
             },
             "Redline Drawing": {
                 "keywords": ["PETA LOKASI", "SKEMA KABEL", "SKEMA"],
-                "method": "presence"
+                "method": "title"
             },
             "BoQ Akhir": {
                 "keywords": ["BOQ UJI TERIMA", "BOQ COMMISSIONING TEST", "LAPORAN BOQ UJI TERIMA", "BILL OF QUANTITY"],
@@ -127,7 +127,7 @@ if uploaded_file:
                 "method": "title"
             },
             "Evidence Photo": {
-                "keywords": ["LAMPIRAN EVIDENCE UJI TERIMA", "EVIDENCE ODP", "EVIDENCE TIANG"],
+                "keywords": ["LAMPIRAN EVIDENCE UJI TERIMA", "DOKUMENTASI UJI TERIMA", "EVIDENCE ODP", "EVIDENCE TIANG"],
                 "method": "presence"
             },
             "Surat Permintaan Uji Terima dari Mitra": {
@@ -151,7 +151,7 @@ if uploaded_file:
             ("2", "B", "BA Test Commissioning dan Lampirannya"),
             ("3", "A", "S/K Penunjukan Team Uji Terima"),
             ("3", "B", "Nota Dinas Pelaksanaan Uji Terima"),
-            ("4", "A", "Red Line Drawing"),
+            ("4", "A", "Redline Drawing"),
             ("4", "B", "BoQ Akhir"),
             ("4", "C", "Hasil Capture"),
             ("4", "D", "Evidence Photo")
