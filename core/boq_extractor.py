@@ -1,58 +1,51 @@
 # core/boq_extractor.py
 import pytesseract
-import re
 import pandas as pd
+import cv2
+import numpy as np
+import re
 
-def find_boq_page(images):
+def find_and_extract_boq_with_cv(images):
     """
-    Memindai gambar untuk menemukan halaman yang berisi "BOQ UJI TERIMA".
-    Mengembalikan nomor indeks halaman jika ditemukan, jika tidak -1.
+    Menggabungkan pipeline pra-pemrosesan gambar dengan parsing Regex cerdas
+    untuk ekstraksi tabel BOQ yang akurat dan dinamis dalam satu fungsi.
     """
     for i, image in enumerate(images):
         try:
-            # Lakukan OCR cepat untuk mencari judul
-            page_text = pytesseract.image_to_string(image, lang="ind+eng", config="--psm 3", timeout=10)
-            if "boq uji terima" in page_text.lower():
-                return i
-        except Exception:
+            # --- 1. PIPELINE PRA-PEMROSESAN GAMBAR (DARI KODE ANDA YANG BERHASIL) ---
+            open_cv_image = np.array(image.convert('RGB'))
+            gray = cv2.cvtColor(open_cv_image, cv2.COLOR_RGB2GRAY)
+            processed_image = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+
+            # --- 2. LAKUKAN OCR PADA GAMBAR YANG SUDAH BERSIH ---
+            ocr_text = pytesseract.image_to_string(processed_image, lang="ind+eng", config="--psm 3")
+            
+            # Cek apakah ini halaman BOQ dari teks yang sudah bersih
+            if "boq uji terima" in ocr_text.lower():
+                # --- 3. PARSING CERDAS DENGAN REGEX ---
+                lines = ocr_text.splitlines()
+                boq_data = []
+                # Pola Regex ini menggunakan 'satuan' (pcs, unit, dll.) sebagai jangkar
+                pattern = re.compile(r"^\s*\d+\s+(.+?)\s+(?:pcs|unit|meter|core|pos|pes)\s+.*?\s+(\d+)\s*$", re.IGNORECASE)
+                
+                for line in lines:
+                    match = pattern.search(line)
+                    if match:
+                        # Grup 1 adalah Designator, Grup 2 adalah Kuantitas
+                        designator = match.group(1).strip()
+                        quantity = int(match.group(2).strip())
+                        
+                        # Filter tambahan untuk membuang baris header yang mungkin cocok
+                        if "uraian" not in designator.lower() and "designator" not in designator.lower():
+                            boq_data.append({"DESIGNATOR": designator, "KUANTITAS_BOQ": quantity})
+                
+                if boq_data:
+                    # Kembalikan DataFrame dan indeks halaman jika berhasil
+                    return pd.DataFrame(boq_data), i
+                    
+        except Exception as e:
+            print(f"Error saat memproses halaman {i+1}: {e}")
             continue
-    return -1
-
-def extract_boq_table(images, boq_page_index):
-
-
-    if boq_page_index == -1:
-        return pd.DataFrame(columns=['DESIGNATOR', 'KUANTITAS_BOQ'])
-    
-    image = images[boq_page_index]
-
-    try:
-        ocr_df = pytesseract.image_to_data(image, lang="ind+eng", config="--psm 3", output_type=pytesseract.Output.DATAFRAME)
-        ocr_df = ocr_df.dropna(subset=['text', 'conf'].copy())
-        ocr_df['text'] = ocr_df['text'].astype(str)
-        ocr_df = ocr_df[ocr_df.conf > 30]
-    except Exception:
-        return pd.DataFrame(columns=['DESIGNATOR', 'KUANTITAS_BOQ'])
-    
-    ocr_df['line_group'] = (ocr_df['top'].diff().abs() > 10).cumsum()
-    lines = ocr_df.groupby('line_group')['text'].apply(lambda x: ' '.join(x)).tolist()
-
-    boq_data = []
-    pattern = re.compile(r"^\s*\d+\s+(.+?)\s+(?:pcs|unit|meter|core|pos|pes)\s+.*?\s+(\d+)\s*$", re.IGNORECASE)
-
-    for line in lines:
-        match = pattern.search(line)
-        if match:
-            designator = match.group(1).strip()
-            quantity = int(match.group(2).strip())
-
-            if "uraian" not in designator.lower() and "pekerjaan" not in designator.lower():
-                boq_data.append({
-                    "DESIGNATOR": designator,
-                    "KUANTITAS_BOQ": quantity
-                })
-
-    if boq_data:
-        return pd.DataFrame(boq_data).drop_duplicates().reset_index(drop=True)
-    
-    return pd.DataFrame(columns=['DESIGNATOR', 'KUANTITAS_BOQ'])
+            
+    # Jika loop selesai tanpa menemukan BOQ
+    return pd.DataFrame(columns=['DESIGNATOR', 'KUANTITAS_BOQ']), -1

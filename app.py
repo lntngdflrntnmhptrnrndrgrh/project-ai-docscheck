@@ -7,30 +7,23 @@ from streamlit.components.v1 import html
 from fpdf import FPDF
 import os
 import io
-import numpy as np
-import pytesseract
+import numpy as np  # noqa: F401
 import traceback
 from core.pdf_reader import extract_text_from_pdf
 from core.checker import check_items
 from core.evidence_counter import collect_evidence
-from core.boq_extractor import find_boq_page
+from core.boq_extractor import find_and_extract_boq_with_cv
 
 
 # ---- CACHING ----
 @st.cache_data
 def process_uploaded_pdf(uploaded_file_bytes):
-    """
-    Fungsi ini melakukan semua pekerjaan berat dan hasilnya akan di-cache.
-    """
     if not os.path.exists('data'):
         os.makedirs('data')
-
-    # Simpan byte ke file sementara untuk diproses
     temp_file_path = f"data/temp_{datetime.now().timestamp()}.pdf"
     with open(temp_file_path, "wb") as f:
         f.write(uploaded_file_bytes)
 
-    # 1. Ekstrak teks dan gambar (proses berat pertama)
     ignore_titles = [
         "CHECKLIST VERIFIKASI BA UJI TERIMA",
         "CHECKLIST VERIFIKASI BERITA ACARA UJI TERIMA",
@@ -39,13 +32,10 @@ def process_uploaded_pdf(uploaded_file_bytes):
     ]
     text_per_page, images = extract_text_from_pdf(temp_file_path, ignore_titles=ignore_titles)
 
-    # 2. Ekstrak data BOQ (proses berat kedua)
-    boq_page_index = find_boq_page(images)
+    df_boq_auto, boq_page_index = find_and_extract_boq_with_cv(images)
 
     os.remove(temp_file_path)
-
-    # Kembalikan semua hasil yang dibutuhkan
-    return text_per_page, images, boq_page_index
+    return text_per_page, images, boq_page_index, df_boq_auto
 
 # ---- APLIKASI UTAMA ----
 st.set_page_config(page_title="Checklist Dokumen Internal", layout="wide")
@@ -69,9 +59,8 @@ if 'stage' not in st.session_state:
 uploaded_file = st.file_uploader("Upload dokumen PDF", type="pdf")
 if uploaded_file:
     uploaded_file_bytes = uploaded_file.getvalue()
-
     try:
-        text_per_page, images, boq_page_index = process_uploaded_pdf(uploaded_file_bytes)
+        text_per_page, images, boq_page_index, df_boq_auto = process_uploaded_pdf(uploaded_file_bytes)
     except Exception as e:
         st.error(f"❌ Terjadi error saat memproses PDF: {e}")
         st.text(traceback.format_exc())
@@ -90,17 +79,6 @@ if uploaded_file:
     # Kata kunci pencarian yang diperbarui dan lebih akurat
     # Menggunakan list untuk memungkinkan beberapa kemungkinan judul per item
         checklist_items = {
-    # Kunci di sini sesuai dengan permintaan Anda, nilainya adalah kata kunci dari PDF
-            #"BAUT": ["BERITA ACARA UJI TERIMA"],
-            #"Laporan UT": ["LAPORAN UJI TERIMA"],
-            #"Surat Permintaan Uji Terima dari Mitra": ["Permohonan Uji Terima SP"],
-            #"BA Test Commissioning": ["BERITA ACARA COMMISIONING TEST"],
-            #"S/K Penunjukan Team Uji Terima": ["Penunjukan Personil Tim Uji Terima"],
-            #"Nota Dinas Pelaksanaan Uji Terima": ["Adapun periode waktu pelaksanaan dari tanggal"],
-            #"Redline Drawing": ["AS BUILT DRAWING", "PETA LOKASI A"],
-            #"BoQ Akhir": ["BOQ UJI TERIMA", "BOQ COMMISSIONING TEST", "LAMPIRAN BOQ UJI TERIMA"],
-            #"Hasil Capture": ["FOTO PENGUKURAN OPM", "HASIL UKUR OTDR"],
-            #"Evidence Photo": ["DOKUMENTASI UJI TERIMA", "DOKUMENTASI INSTALASI", "DOKUMENTASI AKSESORIS TIANG"]
             "BAUT": {
                 "keywords": ["BERITA ACARA UJI TERIMA"],
                 "method": "title"
@@ -157,40 +135,6 @@ if uploaded_file:
             ("4", "D", "Evidence Photo")
         ]
 
-        #checklist_items = {
-        #    "Judul BAUT": ["DOKUMEN BERITA ACARA UJI TERIMA (BAUT-I)", "DOKUMEN BERITA ACARA UJI TERIMA"],
-        #    "Daftar Hadir": ["DAFTAR HADIR UJI TERIMA"],
-        #    "Surat Permintaan Uji Terima dari Mitra": ["Surat Permohonan UT"], # Mencari frasa spesifik
-        #    "SK/Penunjukan Pelaksanaan Uji Terima": ["Penunjukan Personil Tim Uji Terima"], # Frasa ini tidak ada, jadi akan NOK
-        #    "Nota Dinas Pelaksanaan Uji Terima": ["Nota Dinas Pelaksanaan Uji Terima"],
-        #    "BOQ Uji Terima": ["BOQ UJI TERIMA"],
-        #    "Foto Kegiatan Uji Terima": ["DOKUMENTASI UJI TERIMA"],
-        #    "Foto Material terpasang sesuai BOQ": ["DOKUMENTASI SLACK SUPPORT", "DOKUMENTASI JOIN CLOSURE", 
-        #                                           "DOKUMENTASI AKSESORIS TIANG (LABEL KABEL)", "DOKUMENTASI AKSESORIS TIANG (PU-AS-DE)",
-        #                                           "DOKUMENTASI AKSESORIS TIANG (PU-AS-SC)", "DOKUMENTASI TN9", "DOKUMENTASI TN7"], # Judul yang mungkin relevan
-        #    "Foto Roll Meter / Fault Locator": ["Fault Locator"], # Frasa ini tidak ada
-        #    "Foto Pengukuran OPM": ["FOTO PENGUKURAN OPM", "FOTO PENGUKURAN OPM"],
-        #    "Form OPM": ["FORM OPM", "DATA PENGUKURAN OPM"],
-        #    "File PDF OTDR": ["OTDR Report", "HASIL UKUR OTDR"],
-        #    "BA Lapangan": ["BA Lapangan"], # Frasa ini tidak ada
-        #}
-#
-        #structured_items = [
-        #    ("1", "A", "Judul BAUT"),
-        #    ("1", "B", "Daftar Hadir"),
-        #    ("2", "A", "Surat Permintaan Uji Terima dari Mitra"),
-        #    ("3", "A", "SK/Penunjukan Pelaksanaan Uji Terima"),
-        #    ("3", "B", "Nota Dinas Pelaksanaan Uji Terima"),
-        #    ("4", "A", "BOQ Uji Terima"),
-        #    ("4", "B", "Foto Kegiatan Uji Terima"),
-        #    ("4", "C", "Foto Material terpasang sesuai BOQ"),
-        #    ("4", "D", "Foto Roll Meter / Fault Locator"),
-        #    ("4", "E", "Foto Pengukuran OPM"),
-        #    ("4", "F", "Form OPM"),
-        #    ("4", "G", "File PDF OTDR"),
-        #    ("4", "H", "BA Lapangan")
-        #]
-
         # Menggunakan structured_items untuk memastikan urutan yang benar
         item_keys_in_order = [item[2] for item in structured_items]
         check_results = check_items(checklist_items, text_per_page, item_keys_in_order)
@@ -200,7 +144,7 @@ if uploaded_file:
             no, sub, item = structured_items[i]
     
             # Format keterangan berdasarkan list 'Pages' yang diterima
-            keterangan_text = "Item tidak ditemukan"
+            keterangan_text = "Item tidak ditemukan. Apakah judul sudah sesuai ketentuan?"
             if row["Pages"]: # Jika list tidak kosong
                 # Ubah list angka menjadi string yang dipisahkan koma
                 pages_str = ', '.join(map(str, row["Pages"]))
@@ -342,17 +286,19 @@ if uploaded_file:
                 st.image(images[boq_page_index], caption=f"Halaman BOQ (Otomatis terdeteksi di hal. {boq_page_index + 1})")
                 
                 with st.form(key="boq_form"):
-                    st.info("Periksa dan isi kuantitas aktual dari gambar di atas.")
-                    boq_input_data = {
-                        'DESIGNATOR': [
-                            "SC-OF-SM-24", "ODP Solid-PB-8 AS", "PU-S9.0-140", "Slack Support HH",
-                            "Label Kabel Distribusi (KU FO)", "PU-S7.0-400NM", "PU-AS-DE-50/70", "PU-AS-SC"
-                        ], 'KUANTITAS_BOQ': [0] * 8
-                    }
-                    df_boq_input = pd.DataFrame(boq_input_data)
+                    if df_boq_auto is not None and not df_boq_auto.empty:
+                        st.success("Sistem berhasil melakukan ekstrak data pada tabel!")
+                        st.info("Silahkan lakukan verifikasi ulang agar data sesuai.")
+                        initial_data = df_boq_auto
+                    else:
+                        st.warning ("Ekstraksi gagal. Lakukan pengisian manual pada tabel dibawah ini.")
+                        initial_data = pd.DataFrame(columns=['DESIGNATOR', 'KUANTITAS_BOQ'])
+
                     edited_df_boq = st.data_editor(
-                        df_boq_input, hide_index=True, use_container_width=True,
-                        column_config={"DESIGNATOR": st.column_config.Column(disabled=True)}
+                        df_boq_auto,
+                        hide_index = True,
+                        use_container_width = True,
+                        num_rows="dynamic"
                     )
                     submit_button = st.form_submit_button(label="Kumpulkan Bukti & Lanjutkan ke Verifikasi")
 
