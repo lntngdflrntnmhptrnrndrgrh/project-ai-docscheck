@@ -1,15 +1,11 @@
 import difflib
 from fuzzywuzzy import fuzz
+import re
 
 def check_items(checklist_items, text_per_page, item_order):
-    """
-    Memeriksa item dengan metode pencocokan yang berbeda (title vs presence)
-    untuk setiap jenis item checklist.
-    """
     results = []
 
     for item_name in item_order:
-        # Dapatkan konfigurasi untuk item saat ini
         config = checklist_items.get(item_name)
         if not config:
             results.append({"Item": item_name, "Status": "NOK", "Pages": []})
@@ -23,7 +19,9 @@ def check_items(checklist_items, text_per_page, item_order):
             results.append({"Item": item_name, "Status": "NOK", "Pages": []})
             continue
 
-        # Loop melalui setiap halaman
+        if isinstance(method, str):
+            method = [method]
+
         for i, page_text in enumerate(text_per_page):
             if not page_text:
                 continue
@@ -33,28 +31,24 @@ def check_items(checklist_items, text_per_page, item_order):
             for keyword in keywords:
                 keyword_lower = keyword.lower()
                 
-                # --- LOGIKA PENCARIAN CERDAS ---
                 match_found = False
-                if method == "title":
-                    # Untuk judul, cari per baris dengan kemiripan sangat tinggi
+                if 'title' in method:
                     for line in page_text_lower.splitlines():
-                        # fuzz.ratio membandingkan kemiripan seluruh string
                         if fuzz.ratio(keyword_lower, line.strip()) > 85:
                             match_found = True
-                            break # Hentikan loop baris
-                
-                elif method == "presence":
-                    # Untuk frasa, cukup cari keberadaannya di manapun dalam teks halaman
-                    # Normalisasi dengan mengganti baris baru menjadi spasi
+                            break
+
+                if not match_found and 'regex' in method:
+                    if re.search(keyword, page_text, re.IGNORECASE):
+                        match_found = True
+
+                if not match_found and 'presence' in method:
                     normalized_page_text = ' '.join(page_text_lower.split())
                     if keyword_lower in normalized_page_text:
                         match_found = True
 
-                if match_found:
-                    # Jika ditemukan di halaman ini, catat dan lanjut ke halaman berikutnya
-                    if i + 1 not in found_pages:
-                        found_pages.append(i + 1)
-                    # Tidak break loop halaman, agar bisa menemukan di halaman lain juga jika ada
+                if match_found and (i + 1) not in found_pages:
+                    found_pages.append(i + 1)
         
         result = {
             "Item": item_name,
