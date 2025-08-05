@@ -12,9 +12,9 @@ import traceback
 from core.pdf_reader import extract_text_from_pdf
 from core.checker import check_items
 from core.evidence_counter import collect_evidence
-from core.boq_extractor import find_and_extract_boq_with_cv
+from core.boq_extractor import find_boq_page, extract_boq_table_with_cv
 
-
+st.cache_data.clear()
 # ---- CACHING ----
 @st.cache_data
 def process_uploaded_pdf(uploaded_file_bytes):
@@ -28,18 +28,20 @@ def process_uploaded_pdf(uploaded_file_bytes):
         "CHECKLIST VERIFIKASI BA UJI TERIMA",
         "CHECKLIST VERIFIKASI BERITA ACARA UJI TERIMA",
         "CHECKLIST VERIFIKASI BERITA ACARA COMMISSIONING TEST",
-        "BOQ COMMISSIONING TEST"
+        "DOKUMEN BERITA ACARA UJI TERIMA KESATU",
+        "DOKUMEN BERITA ACARA UJI TERIMA",
     ]
     text_per_page, images = extract_text_from_pdf(temp_file_path, ignore_titles=ignore_titles)
 
-    df_boq_auto, boq_page_index = find_and_extract_boq_with_cv(images)
+    boq_page_index = find_boq_page(images)
+    df_boq_auto = extract_boq_table_with_cv(images, boq_page_index)
 
     os.remove(temp_file_path)
     return text_per_page, images, boq_page_index, df_boq_auto
 
 # ---- APLIKASI UTAMA ----
-st.set_page_config(page_title="Checklist Dokumen Internal", layout="wide")
-st.title("📄 Checklist Verifikasi Dokumen Internal")
+st.set_page_config(page_title="SIVERDI | Sistem Verifikasi Dokumen Internal", layout="wide")
+st.title("📄 Sistem Verifikasi Dokumen Internal")
 
 if 'boq_submitted' not in st.session_state:
     st.session_state.boq_submitted = False
@@ -79,14 +81,16 @@ if uploaded_file:
     # Kata kunci pencarian yang diperbarui dan lebih akurat
     # Menggunakan list untuk memungkinkan beberapa kemungkinan judul per item
         checklist_items = {
+            # Pencarian menggunakan metode regex
             "BAUT": {
-                "keywords": ["BERITA ACARA UJI TERIMA"],
-                "method": "title"
+                "keywords": [r"BERITA ACARA\s*UJI TERIMA"],
+                "method": "regex"
             },
             "Laporan UT": {
-                "keywords": ["LAPORAN UJI TERIMA"],
-                "method": "title"
+                "keywords": ["LAPORAN UJI TERIMA", r"LAPORAN\s*UJI TERIMA"],
+                "method": "regex"
             },
+            # Pencarian menggunakan metode title
             "BA Test Commissioning": {
                 "keywords": ["BERITA ACARA COMMISSIONING TEST"],
                 "method": "title"
@@ -96,7 +100,7 @@ if uploaded_file:
                 "method": "title"
             },
             "BoQ Akhir": {
-                "keywords": ["BOQ UJI TERIMA", "BOQ COMMISSIONING TEST", "LAPORAN BOQ UJI TERIMA", "BILL OF QUANTITY"],
+                "keywords": ["BILL OF QUANTITY UJI TERIMA", "BOQ UJI TERIMA", "BOQ COMMISSIONING TEST", "LAPORAN BOQ UJI TERIMA"],
                 "method": "title"
             },
             "Hasil Capture": {
@@ -104,6 +108,7 @@ if uploaded_file:
                              "DATA PENGUKURAN OPM", "EVIDENCE HASIL UKUR", "EVIDENCE HASIL UKUR FEEDER", "EVIDENCE HASIL IN FEEDER OPM"],
                 "method": "title"
             },
+            # Pencarian menggunakan metode presence (mencari berdasarkan frasa yang ditemukan)
             "Evidence Photo": {
                 "keywords": ["LAMPIRAN EVIDENCE UJI TERIMA", "DOKUMENTASI UJI TERIMA", "EVIDENCE ODP", "EVIDENCE TIANG"],
                 "method": "presence"
@@ -144,7 +149,7 @@ if uploaded_file:
             no, sub, item = structured_items[i]
     
             # Format keterangan berdasarkan list 'Pages' yang diterima
-            keterangan_text = "Item tidak ditemukan. Apakah judul sudah sesuai ketentuan?"
+            keterangan_text = "Halaman tidak ditemukan atau judul tidak sesuai."
             if row["Pages"]: # Jika list tidak kosong
                 # Ubah list angka menjadi string yang dipisahkan koma
                 pages_str = ', '.join(map(str, row["Pages"]))
