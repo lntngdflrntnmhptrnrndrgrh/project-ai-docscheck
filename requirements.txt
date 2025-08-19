@@ -10,3 +10,5 @@ Pillow
 xlsxwriter
 python-Levenshtein
 fuzzywuzzy
+opencv-python
+opencv-python-headless
